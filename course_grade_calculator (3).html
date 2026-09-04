@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Course Grade Calculator</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: Arial, sans-serif; background: #f4f6f8; color: #222;
+  }
+  .container {
+    max-width: 950px; margin: 30px auto; padding: 20px;
+  }
+  h1 { margin-bottom: 6px; }
+  .subtitle { color: #666; margin-top: 0; }
+  .card {
+    background: white; border-radius: 12px; padding: 20px; margin: 16px 0;
+    box-shadow: 0 2px 10px rgba(0,0,0,.08);
+  }
+  .row {
+    display: grid; grid-template-columns: 2fr 1fr 1fr auto;
+    gap: 10px; align-items: center; margin-bottom: 10px;
+  }
+  select { background: white; }
+  input {
+    width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 7px;
+    font-size: 15px;
+  }
+  button {
+    border: 0; border-radius: 7px; padding: 10px 14px; cursor: pointer;
+    font-size: 14px;
+  }
+  .primary { background: #2563eb; color: white; }
+  .secondary { background: #e5e7eb; }
+  .danger { background: #ef4444; color: white; }
+  .success { background: #16a34a; color: white; }
+  .result {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  }
+  .result-box {
+    background: #f8fafc; border-radius: 10px; padding: 15px; text-align: center;
+  }
+  .big { font-size: 28px; font-weight: bold; margin-top: 5px; }
+  .target-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end;
+  }
+  .message { margin-top: 12px; font-weight: bold; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  th, td { padding: 9px; border: 1px solid #ddd; text-align: center; }
+  th { background: #e5e7eb; }
+  .pass { font-weight: bold; }
+  .note { color: #666; font-size: 13px; }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+  .save-status { font-size: 13px; color: #16a34a; }
+  @media (max-width: 700px) {
+    .row { grid-template-columns: 1fr 1fr; }
+    .row button { grid-column: 2; }
+    .result, .target-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Course Grade Calculator</h1>
+  <p class="subtitle">Enter your assessment weightages and marks. You can reuse this for any course.</p>
+
+  <div class="card">
+    <h2>Assessments</h2>
+    <div id="assessments"></div>
+    <div class="btn-row">
+      <button class="primary" onclick="addAssessment()">+ Add Assessment</button>
+      <button class="success" onclick="saveData()">Save</button>
+      <button class="secondary" onclick="loadData()">Load</button>
+      <button class="secondary" onclick="resetAll()">Reset</button>
+      <span class="save-status" id="saveStatus"></span>
+    </div>
+    <p class="note">Weightage cannot exceed 100% total. Marks are entered out of 100. Use “Save recommended marks” below to store targets you calculated.</p>
+  </div>
+
+  <div class="card">
+    <h2>Current Result</h2>
+    <div class="result">
+      <div class="result-box">
+        <div>Weightage entered</div>
+        <div class="big" id="weightTotal">0%</div>
+      </div>
+      <div class="result-box">
+        <div>Overall mark</div>
+        <div class="big" id="overall">0.00</div>
+      </div>
+      <div class="result-box">
+        <div>Grade</div>
+        <div class="big" id="grade">-</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Target Grade</h2>
+    <div class="target-row">
+      <div>
+        <label>Target overall mark</label>
+        <input id="target" type="number" min="0" max="100" value="80" oninput="syncTargetAndCalculate()">
+      </div>
+      <div>
+        <div>Required average on assessments with no mark entered</div>
+        <div class="big" id="needed">-</div>
+      </div>
+    </div>
+    <div class="message" id="targetMessage"></div>
+  </div>
+
+  <div class="card">
+    <h2>Recommended Marks</h2>
+    <p class="note">Enter your Test mark (and Assignment mark if you already have it). The calculator recommends marks for whatever is still empty — including when only Final Assessment is left.</p>
+
+    <div class="target-row">
+      <div>
+        <label>Target overall mark</label>
+        <input id="recommendTarget" type="number" min="0" max="100" value="80" oninput="updateRecommendations()">
+      </div>
+      <div>
+        <label>Recommendation style</label>
+        <select id="recommendStyle" onchange="updateRecommendations()" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:7px;font-size:15px;">
+          <option value="balanced">Balanced — same mark for both</option>
+          <option value="assignment">Assignment-focused — assignment 5 marks higher</option>
+          <option value="final">Final-focused — final 5 marks higher</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="result" style="margin-top:15px;">
+      <div class="result-box">
+        <div>Assignment recommended</div>
+        <div class="big" id="recommendedAssignment">-</div>
+      </div>
+      <div class="result-box">
+        <div>Final Assessment recommended</div>
+        <div class="big" id="recommendedFinal">-</div>
+      </div>
+      <div class="result-box">
+        <div>Expected overall</div>
+        <div class="big" id="recommendedOverall">-</div>
+      </div>
+    </div>
+    <div class="btn-row" style="margin-top:12px;">
+      <button class="success" onclick="saveRecommendedMarks()">Save to history</button>
+      <button class="primary" onclick="exportRecommendedTxt()">Download TXT</button>
+      <button class="secondary" onclick="applyRecommendedMarks()">Apply to assessments</button>
+      <button class="secondary" onclick="clearRecommendHistory()">Clear history</button>
+      <span class="save-status" id="recommendSaveStatus"></span>
+    </div>
+    <p class="note" id="historyCount">No saved recommendations yet.</p>
+    <div class="message" id="recommendMessage"></div>
+  </div>
+
+  <div class="card">
+    <h2>Grade Scale</h2>
+    <table>
+      <tr><th>Grade</th><th>Marks Range</th><th>Grade Point</th></tr>
+      <tr><td>A</td><td>80–100</td><td>4.0000</td></tr>
+      <tr><td>A-</td><td>75–79</td><td>3.7500</td></tr>
+      <tr><td>B+</td><td>70–74</td><td>3.5000</td></tr>
+      <tr><td>B</td><td>65–69</td><td>3.0000</td></tr>
+      <tr><td>B-</td><td>60–64</td><td>2.7500</td></tr>
+      <tr><td>C+</td><td>55–59</td><td>2.5000</td></tr>
+      <tr><td>C</td><td>50–54</td><td>2.0000</td></tr>
+      <tr><td>F</td><td>0–49</td><td>0.0000</td></tr>
+    </table>
+    <p class="note">Passing grade: C and above.</p>
+  </div>
+</div>
+
+<script>
+let assessments = [
+  {name: "Test", weight: "", mark: ""},
+  {name: "Assignments", weight: "", mark: ""},
+  {name: "Final Assessment", weight: "", mark: ""}
+];
+
+function render() {
+  const box = document.getElementById("assessments");
+  box.innerHTML = "";
+  assessments.forEach((a, i) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `
+      <input placeholder="Assessment name" value="${a.name}" oninput="update(${i},'name',this.value)">
+      <input type="number" min="0" max="100" placeholder="Weight %" value="${a.weight}" oninput="update(${i},'weight',this.value)">
+      <input type="number" min="0" max="100" placeholder="Mark / 100" value="${a.mark}" oninput="update(${i},'mark',this.value)">
+      <button class="danger" onclick="removeAssessment(${i})">Remove</button>
+    `;
+    box.appendChild(row);
+  });
+  calculate();
+}
+
+function syncTargetAndCalculate() {
+  document.getElementById("recommendTarget").value = document.getElementById("target").value;
+  calculate();
+}
+
+function update(i, key, value) {
+  if (key === "name") {
+    assessments[i][key] = value;
+  } else if (key === "weight") {
+    if (value === "") {
+      assessments[i].weight = "";
+    } else {
+      let w = Number(value);
+      if (isNaN(w) || w < 0) w = 0;
+      // Cap so total weightage cannot exceed 100%
+      const otherTotal = assessments.reduce((s, a, idx) => {
+        if (idx === i) return s;
+        return s + (Number(a.weight) || 0);
+      }, 0);
+      const maxAllowed = Math.max(0, 100 - otherTotal);
+      if (w > maxAllowed) w = maxAllowed;
+      if (w > 100) w = 100;
+      assessments[i].weight = w;
+      // Update the input to show the capped value (without full re-render)
+      const box = document.getElementById("assessments");
+      const rows = box.querySelectorAll(".row");
+      if (rows[i]) {
+        const weightInput = rows[i].querySelectorAll("input")[1];
+        if (weightInput && Number(weightInput.value) !== w) {
+          weightInput.value = w;
+        }
+      }
+    }
+  } else {
+    assessments[i][key] = value === "" ? "" : Number(value);
+  }
+  calculate();
+}
+
+function addAssessment() {
+  assessments.push({name: "New Assessment", weight: 0, mark: ""});
+  render();
+}
+
+function removeAssessment(i) {
+  assessments.splice(i, 1);
+  render();
+}
+
+function gradeInfo(mark) {
+  if (mark >= 80) return ["A", "4.0000"];
+  if (mark >= 75) return ["A-", "3.7500"];
+  if (mark >= 70) return ["B+", "3.5000"];
+  if (mark >= 65) return ["B", "3.0000"];
+  if (mark >= 60) return ["B-", "2.7500"];
+  if (mark >= 55) return ["C+", "2.5000"];
+  if (mark >= 50) return ["C", "2.0000"];
+  return ["F", "0.0000"];
+}
+
+function calculate() {
+  let weightTotal = assessments.reduce((s,a) => s + (Number(a.weight)||0), 0);
+  let overall = 0;
+  let knownWeight = 0;
+  let unknownWeight = 0;
+
+  assessments.forEach(a => {
+    const w = Number(a.weight)||0;
+    if (a.mark !== "" && !isNaN(Number(a.mark))) {
+      overall += Number(a.mark) * w / 100;
+      knownWeight += w;
+    } else {
+      unknownWeight += w;
+    }
+  });
+
+  const weightEl = document.getElementById("weightTotal");
+  weightEl.textContent = weightTotal.toFixed(1) + "%";
+  if (weightTotal > 100) {
+    weightEl.style.color = "#ef4444";
+  } else if (weightTotal === 100) {
+    weightEl.style.color = "#16a34a";
+  } else {
+    weightEl.style.color = "";
+  }
+  document.getElementById("overall").textContent = overall.toFixed(2);
+
+  if (weightTotal === 100 && knownWeight > 0) {
+    const [g, gp] = gradeInfo(overall);
+    document.getElementById("grade").textContent = g + " (" + gp + ")";
+  } else {
+    document.getElementById("grade").textContent = "-";
+  }
+
+  const target = Number(document.getElementById("target").value)||0;
+  const neededEl = document.getElementById("needed");
+  const msg = document.getElementById("targetMessage");
+
+  updateRecommendations();
+
+  if (unknownWeight > 0) {
+    const required = (target - overall) / (unknownWeight / 100);
+    neededEl.textContent = required.toFixed(2) + "%";
+    if (required <= 0) {
+      msg.textContent = "You have already reached the target.";
+    } else if (required > 100) {
+      msg.textContent = "This target is not achievable with the remaining assessments.";
+    } else {
+      msg.textContent = "You need an average of " + required.toFixed(2) + "% across the remaining ungraded assessments.";
+    }
+  } else {
+    neededEl.textContent = "-";
+    msg.textContent = "All assessments have marks entered.";
+  }
+}
+
+// Last computed recommendations (used by Save / Apply)
+let lastRecommended = { assignment: null, final: null, overall: null };
+
+function isAssignmentName(name) {
+  const n = (name || "").toLowerCase();
+  return n.includes("assignment") && !n.includes("final");
+}
+
+function isFinalName(name) {
+  return (name || "").toLowerCase().includes("final");
+}
+
+function updateRecommendations() {
+  const target = Number(document.getElementById("recommendTarget").value) || 0;
+  const style = document.getElementById("recommendStyle").value;
+
+  let current = 0;
+  let assignmentRemaining = null; // { name, weight } if mark not entered
+  let finalRemaining = null;
+  let assignmentEntered = null;   // mark if already entered
+  let finalEntered = null;
+
+  assessments.forEach(a => {
+    const w = Number(a.weight) || 0;
+    const hasMark = a.mark !== "" && !isNaN(Number(a.mark));
+    if (hasMark) {
+      current += Number(a.mark) * w / 100;
+      if (isAssignmentName(a.name)) assignmentEntered = Number(a.mark);
+      if (isFinalName(a.name)) finalEntered = Number(a.mark);
+    } else if (w > 0) {
+      if (isAssignmentName(a.name)) assignmentRemaining = { name: a.name, weight: w };
+      if (isFinalName(a.name)) finalRemaining = { name: a.name, weight: w };
+    }
+  });
+
+  const aEl = document.getElementById("recommendedAssignment");
+  const fEl = document.getElementById("recommendedFinal");
+  const oEl = document.getElementById("recommendedOverall");
+  const msg = document.getElementById("recommendMessage");
+
+  const requiredContribution = target - current;
+  let aMark = null;
+  let fMark = null;
+
+  // Case 1: both Assignment and Final still need marks
+  if (assignmentRemaining && finalRemaining) {
+    const assignmentWeight = assignmentRemaining.weight;
+    const finalWeight = finalRemaining.weight;
+    if (style === "balanced") {
+      const sameMark = requiredContribution / ((assignmentWeight + finalWeight) / 100);
+      aMark = sameMark;
+      fMark = sameMark;
+    } else if (style === "assignment") {
+      aMark = (requiredContribution + 5 * finalWeight / 100) / ((assignmentWeight + finalWeight) / 100);
+      fMark = aMark - 5;
+    } else {
+      aMark = (requiredContribution - 5 * finalWeight / 100) / ((assignmentWeight + finalWeight) / 100);
+      fMark = aMark + 5;
+    }
+  }
+  // Case 2: only Final left (Test + Assignment already entered)
+  else if (finalRemaining && !assignmentRemaining) {
+    const w = finalRemaining.weight;
+    fMark = requiredContribution / (w / 100);
+    aMark = assignmentEntered; // show what you already scored
+  }
+  // Case 3: only Assignment left
+  else if (assignmentRemaining && !finalRemaining) {
+    const w = assignmentRemaining.weight;
+    aMark = requiredContribution / (w / 100);
+    fMark = finalEntered;
+  }
+  // Case 4: nothing left to recommend
+  else {
+    lastRecommended = { assignment: null, final: null, overall: null };
+    aEl.textContent = assignmentEntered != null ? assignmentEntered.toFixed(1) + "% (entered)" : "-";
+    fEl.textContent = finalEntered != null ? finalEntered.toFixed(1) + "% (entered)" : "-";
+    oEl.textContent = current.toFixed(2);
+    msg.textContent = "All assessments already have marks. No further recommendation needed.";
+    return;
+  }
+
+  // Round up so target is not missed
+  if (aMark != null && assignmentRemaining) aMark = Math.ceil(aMark * 10) / 10;
+  if (fMark != null && finalRemaining) fMark = Math.ceil(fMark * 10) / 10;
+
+  let expected = current;
+  if (assignmentRemaining && aMark != null) expected += aMark * assignmentRemaining.weight / 100;
+  if (finalRemaining && fMark != null) expected += fMark * finalRemaining.weight / 100;
+
+  lastRecommended = {
+    assignment: assignmentRemaining ? aMark : null,
+    final: finalRemaining ? fMark : null,
+    overall: expected
+  };
+
+  aEl.textContent = aMark != null
+    ? (assignmentRemaining ? aMark.toFixed(1) + "%" : aMark.toFixed(1) + "% (entered)")
+    : "-";
+  fEl.textContent = fMark != null
+    ? (finalRemaining ? fMark.toFixed(1) + "%" : fMark.toFixed(1) + "% (entered)")
+    : "-";
+  oEl.textContent = expected.toFixed(2);
+
+  const needA = assignmentRemaining && aMark != null;
+  const needF = finalRemaining && fMark != null;
+  if ((needA && aMark > 100) || (needF && fMark > 100)) {
+    msg.textContent = "This target is not achievable with the marks currently entered.";
+  } else if ((needA && aMark < 0) || (needF && fMark < 0)) {
+    msg.textContent = "You have already earned enough marks to reach this target.";
+  } else if (assignmentRemaining && finalRemaining) {
+    msg.textContent = "Aim for at least these marks. Adjust the style if you expect to do better in one assessment.";
+  } else if (finalRemaining) {
+    msg.textContent = "Only Final Assessment left. You need about " + fMark.toFixed(1) + "% on the final to reach your target.";
+  } else if (assignmentRemaining) {
+    msg.textContent = "Only Assignment left. You need about " + aMark.toFixed(1) + "% on the assignment to reach your target.";
+  }
+}
+
+function resetAll() {
+  assessments = [
+    {name: "Test", weight: "", mark: ""},
+    {name: "Assignments", weight: "", mark: ""},
+    {name: "Final Assessment", weight: "", mark: ""}
+  ];
+  document.getElementById("target").value = 80;
+  document.getElementById("recommendTarget").value = 80;
+  document.getElementById("recommendStyle").value = "balanced";
+  lastRecommended = { assignment: null, final: null, overall: null };
+  showStatus("saveStatus", "Reset to defaults");
+  render();
+}
+
+const HISTORY_KEY = "courseGradeRecommendHistory";
+
+function getRecommendHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function setRecommendHistory(list) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  updateHistoryCount();
+}
+
+function updateHistoryCount() {
+  const el = document.getElementById("historyCount");
+  if (!el) return;
+  const n = getRecommendHistory().length;
+  el.textContent = n === 0
+    ? "No saved recommendations yet. Click “Save to history”, then “Download TXT”."
+    : n + " recommendation(s) in history — Download TXT includes all of them.";
+}
+
+function snapshotCurrentMarks() {
+  return assessments.map(a => ({
+    name: a.name || "(unnamed)",
+    weight: a.weight === "" ? "-" : a.weight,
+    mark: a.mark === "" ? "(empty)" : a.mark
+  }));
+}
+
+function saveRecommendedMarks() {
+  if (lastRecommended.assignment == null && lastRecommended.final == null) {
+    showStatus("recommendSaveStatus", "Nothing to save — enter marks and set a target first", true);
+    return;
+  }
+  const entry = {
+    savedAt: new Date().toLocaleString(),
+    target: document.getElementById("recommendTarget").value,
+    style: document.getElementById("recommendStyle").value,
+    recommendedAssignment: lastRecommended.assignment,
+    recommendedFinal: lastRecommended.final,
+    expectedOverall: lastRecommended.overall,
+    assessments: snapshotCurrentMarks()
+  };
+  const history = getRecommendHistory();
+  history.push(entry); // append
+  setRecommendHistory(history);
+  showStatus("recommendSaveStatus", "Appended to history (" + history.length + ")");
+}
+
+function formatHistoryAsTxt(history) {
+  if (!history.length) return "No recommended marks saved yet.\n";
+  let lines = [];
+  lines.push("Course Grade Calculator — Recommended Marks Log");
+  lines.push("==============================================");
+  lines.push("");
+  history.forEach((e, i) => {
+    lines.push("--- Entry " + (i + 1) + " — " + (e.savedAt || "") + " ---");
+    lines.push("Target overall: " + (e.target ?? "-"));
+    lines.push("Style: " + (e.style ?? "-"));
+    lines.push("Recommended Assignment: " + (e.recommendedAssignment != null ? e.recommendedAssignment + "%" : "-"));
+    lines.push("Recommended Final: " + (e.recommendedFinal != null ? e.recommendedFinal + "%" : "-"));
+    lines.push("Expected overall: " + (e.expectedOverall != null ? e.expectedOverall : "-"));
+    if (e.assessments && e.assessments.length) {
+      lines.push("Assessments at save time:");
+      e.assessments.forEach(a => {
+        lines.push("  - " + a.name + " | weight " + a.weight + "% | mark " + a.mark);
+      });
+    }
+    lines.push("");
+  });
+  return lines.join("\n");
+}
+
+function exportRecommendedTxt() {
+  const history = getRecommendHistory();
+  if (!history.length) {
+    showStatus("recommendSaveStatus", "History is empty — save at least once first", true);
+    return;
+  }
+  const text = formatHistoryAsTxt(history);
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "course_recommended_marks.txt";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showStatus("recommendSaveStatus", "Downloaded TXT with " + history.length + " entry(ies)");
+}
+
+function clearRecommendHistory() {
+  if (!getRecommendHistory().length) {
+    showStatus("recommendSaveStatus", "History already empty", true);
+    return;
+  }
+  if (!confirm("Clear all saved recommended marks from history?")) return;
+  setRecommendHistory([]);
+  showStatus("recommendSaveStatus", "History cleared");
+}
+
+function applyRecommendedMarks() {
+  if (lastRecommended.assignment == null && lastRecommended.final == null) {
+    showStatus("recommendSaveStatus", "No recommendations to apply", true);
+    return;
+  }
+  let applied = 0;
+  assessments.forEach((a, i) => {
+    const empty = a.mark === "" || isNaN(Number(a.mark));
+    if (!empty) return;
+    if (isAssignmentName(a.name) && lastRecommended.assignment != null) {
+      assessments[i].mark = lastRecommended.assignment;
+      applied++;
+    } else if (isFinalName(a.name) && lastRecommended.final != null) {
+      assessments[i].mark = lastRecommended.final;
+      applied++;
+    }
+  });
+  if (applied === 0) {
+    showStatus("recommendSaveStatus", "No empty assessment fields to fill", true);
+    return;
+  }
+  render();
+  showStatus("recommendSaveStatus", "Recommended marks applied to assessments");
+}
+
+function loadData() {
+  const history = getRecommendHistory();
+  if (!history.length) {
+    showStatus("saveStatus", "No history to load", true);
+    return;
+  }
+  const data = history[history.length - 1]; // latest entry
+  if (data.target != null) document.getElementById("recommendTarget").value = data.target;
+  if (data.style) document.getElementById("recommendStyle").value = data.style;
+  updateRecommendations();
+  showStatus("saveStatus", "Loaded latest history entry");
+}
+
+function showStatus(id, msg, isError) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = isError ? "#ef4444" : "#16a34a";
+  clearTimeout(showStatus._timers?.[id]);
+  if (!showStatus._timers) showStatus._timers = {};
+  showStatus._timers[id] = setTimeout(() => { el.textContent = ""; }, 2500);
+}
+
+function saveData() {
+  saveRecommendedMarks();
+  showStatus("saveStatus", "Appended to history");
+}
+
+(function init() {
+  updateHistoryCount();
+  render();
+})();
+</script>
+</body>
+</html>
